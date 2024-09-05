@@ -1,0 +1,317 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Image Points Selection with Scaled Display</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            background-color: #f0f0f5;
+            margin: 0;
+        }
+        h1 {
+            margin-bottom: 20px;
+        }
+        .container {
+            display: flex;
+            justify-content: space-between;
+            gap: 40px;
+            margin-bottom: 20px;
+        }
+        .image-container {
+            position: relative;
+            border: 2px solid #ccc;
+            border-radius: 10px;
+            background-color: #fff;
+            overflow: hidden;
+            max-width: 500px;
+            max-height: 500px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .image-container img {
+            width: 100%;
+            height: 100%;
+            object-fit: contain;
+            display: block;
+        }
+        .image-placeholder {
+            width: 100%;
+            height: 100%;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            background-color: #f0f0f5;
+        }
+        .point {
+            position: absolute;
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            transform: translate(-50%, -50%);
+        }
+        .blue-point {
+            background-color: #0080ff;
+        }
+        .red-point {
+            background-color: red;
+        }
+        .horizontal-center {
+          margin: 0;
+          position: absolute;
+          left: 50%;
+          -ms-transform: translateY(-50%);
+          transform: translateY(-50%);
+        }
+        button {
+            padding: 10px 20px;
+            background-color: #28a745;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        input[type="file"] {
+            margin-bottom: 10px;
+        }
+
+        .loader {
+          width: 48px;
+          height: 48px;
+          display: inline-block;
+          position: relative;
+          border: 2px solid #000;
+          box-sizing: border-box;
+          animation: rotation 2s linear infinite;
+        }
+        .loader::after,
+        .loader::before {
+          content: '';
+          box-sizing: border-box;
+          position: absolute;
+          left: 0;
+          right: 0;
+          top: 0;
+          bottom: 0;
+          margin: auto;
+          border: 2px solid #FF3D00;
+          width: 38px;
+          height: 38px;
+          animation: rotationBack 1.5s linear infinite;
+          transform-origin: center center;
+        }
+        .loader::before {
+          width: 28px;
+          height: 28px;
+          border-color: #0080ff;
+          box-sizing: border-box;
+          animation: rotation 1s linear infinite;
+        }
+
+        @keyframes rotation {
+          0% {
+            transform: rotate(0deg);
+          }
+          100% {
+            transform: rotate(360deg);
+          }
+        }
+        @keyframes rotationBack {
+          0% {
+            transform: rotate(0deg);
+          }
+          100% {
+            transform: rotate(-360deg);
+          }
+        }
+
+    </style>
+</head>
+<body>
+<div class="loader"></div>
+    <h1>Compute geometry</h1>
+    <h2>Upload two photos and then draw two points on each to compute distance between points.</h2>
+
+    <div class="container">
+        <!-- Первое изображение -->
+        <div>
+            <input type="file" id="file1" accept="image/*">
+            <div class="image-container" id="container1">
+                <img id="image1" alt="Image 1" src="images.png">
+                <div id="points-image1"></div>
+            </div>
+            <button onclick="undoPoint('image1')">Delete point</button>
+        </div>
+
+        <!-- Второе изображение -->
+        <div>
+            <input type="file" id="file2" accept="image/*">
+            <div class="image-container" id="container2">
+                <img id="image2" alt="Image 2" src="images.png">
+                <div id="points-image2"></div>
+            </div>
+            <button onclick="undoPoint('image2')">Delete point</button>
+        </div>
+    </div>
+
+    <button onclick="sendData()">Send Data</button>
+
+
+    <script>
+        let points = {
+            image1: [],
+            image2: []
+        };
+        let currentPoint = 'blue';
+
+        // Функция для отображения загруженного изображения и динамического изменения контейнера
+        function loadImage(input, imgElement, containerElement, placeholderElement, imageId) {
+            const file = input.files[0];
+            const reader = new FileReader();
+            reader.onload = function (e) {
+                imgElement.src = e.target.result;
+                imgElement.hidden = false;
+                imgElement.dataset.width = null;
+                imgElement.dataset.height = null;
+                placeholderElement.style.display = 'none'; // Скрываем плейсхолдер
+
+                // Удаляем все точки, если изображение меняется
+                const pointsContainer = document.getElementById('points-' + imageId);
+                pointsContainer.innerHTML = '';
+                points[imageId] = []; // Очищаем массив точек
+
+                const img = new Image();
+                img.src = e.target.result;
+                img.onload = function() {
+                    const imgWidth = img.width;
+                    const imgHeight = img.height;
+
+                    imgElement.dataset.width = imgWidth;
+                    imgElement.dataset.height = imgHeight;
+
+                    // Определение масштаба изображения для его отображения
+                    const maxContainerSize = 700; // Максимальный размер контейнера (500x500 пикселей)
+                    let scale = Math.min(maxContainerSize / imgWidth, maxContainerSize / imgHeight);
+
+                    // Вычисляем размеры отображаемого изображения
+                    const displayWidth = imgWidth * scale;
+                    const displayHeight = imgHeight * scale;
+
+                    // Устанавливаем размеры контейнера под отображаемое изображение
+                    containerElement.style.width = displayWidth + 'px';
+                    containerElement.style.height = displayHeight + 'px';
+                };
+            };
+            reader.readAsDataURL(file);
+        }
+
+        // Загрузка изображений при выборе
+        document.getElementById('file1').addEventListener('change', function() {
+            loadImage(this, document.getElementById('image1'), document.getElementById('container1'), document.getElementById('placeholder1'), 'image1');
+        });
+
+        document.getElementById('file2').addEventListener('change', function() {
+            loadImage(this, document.getElementById('image2'), document.getElementById('container2'), document.getElementById('placeholder2'), 'image2');
+        });
+
+        // Функция для размещения точки
+        function placePoint(event, imageId) {
+            const container = document.getElementById('points-' + imageId);
+            const img = document.getElementById(imageId);
+            const imgWidth = img.dataset.width;
+            const imgHeight = img.dataset.height;
+
+            if (!imgWidth || !imgHeight) {
+                alert('Изображение еще не загружено полностью.');
+                return;
+            }
+
+            const containerRect = img.getBoundingClientRect();
+            const xRelative = event.clientX - containerRect.left;
+            const yRelative = event.clientY - containerRect.top;
+
+            // Рассчет координат относительно исходного изображения
+            const scaleX = imgWidth / containerRect.width;
+            const scaleY = imgHeight / containerRect.height;
+            const x = xRelative * scaleX;
+            const y = yRelative * scaleY;
+
+            // Проверяем, если уже есть 2 точки, то не добавляем больше
+            if (points[imageId].length >= 2) return;
+
+            // Добавляем точку
+            const point = document.createElement('div');
+            point.className = 'point ' + (currentPoint === 'blue' ? 'blue-point' : 'red-point');
+            point.style.left = `${xRelative}px`;
+            point.style.top = `${yRelative}px`;
+            container.appendChild(point);
+
+            // Сохраняем координаты точки относительно исходного изображения
+            points[imageId].push({ color: currentPoint, x, y, element: point });
+
+            // Меняем цвет на следующий (синяя -> красная -> завершение)
+            currentPoint = currentPoint === 'blue' ? 'red' : 'blue';
+        }
+
+        // Добавляем клик на изображения для размещения точек
+        document.getElementById('image1').addEventListener('click', function (event) {
+            if (this.src) {
+                placePoint(event, 'image1');
+            }
+        });
+        document.getElementById('image2').addEventListener('click', function (event) {
+            if (this.src) {
+                placePoint(event, 'image2');
+            }
+        });
+
+        // Функция для отмены последней добавленной точки
+        function undoPoint(imageId) {
+            if (points[imageId].length > 0) {
+                // Удаляем последнюю точку с интерфейса
+                const lastPoint = points[imageId].pop();
+                lastPoint.element.remove();
+
+                // Если удалили красную точку, следующая добавится синяя
+                currentPoint = lastPoint.color === 'red' ? 'red' : 'blue';
+            }
+        }
+
+        // Функция для отправки данных на сервер
+        function sendData() {
+            const file1 = document.getElementById('file1').files[0];
+            const file2 = document.getElementById('file2').files[0];
+
+            if (!file1 || !file2 || points.image1.length !== 2 || points.image2.length !== 2) {
+                alert('Пожалуйста, выберите два изображения и отметьте по две точки на каждом.');
+                return;
+            }
+
+            const formData = new FormData();
+            formData.append('file1', file1);
+            formData.append('file2', file2);
+            formData.append('points', JSON.stringify(points));
+
+            fetch('/process-data', {
+                method: 'POST',
+                body: formData
+            })
+            .then(response => response.json())
+            .then(data => {
+                console.log('Success:', data);
+            })
+            .catch(error => {
+                console.error('Error:', error);
+            });
+        }
+    </script>
+</body>
+</html>
