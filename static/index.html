@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Image Points Selection with Scaled Display</title>
+    <title>GeoCV-3D</title>
     <style>
         body {
             font-family: Arial, sans-serif;
@@ -27,11 +27,11 @@
         .image-container {
             position: relative;
             border: 2px solid #ccc;
-            border-radius: 10px;
+            border-radius: 0;
             background-color: #fff;
             overflow: hidden;
-            max-width: 500px;
-            max-height: 500px;
+            max-width: 1000px;
+            max-height: 1000px;
             display: flex;
             align-items: center;
             justify-content: center;
@@ -69,6 +69,9 @@
           left: 50%;
           -ms-transform: translateY(-50%);
           transform: translateY(-50%);
+        }
+        .btn-red {
+            background-color: rgba(237, 43, 43, 0.7);
         }
         button {
             padding: 10px 20px;
@@ -136,57 +139,52 @@
     </style>
 </head>
 <body>
-<div class="loader"></div>
+    <div class="loader"></div>
     <h1>Compute geometry</h1>
     <h2>Upload two photos and then draw two points on each to compute distance between points.</h2>
 
     <div class="container">
-        <!-- Первое изображение -->
         <div>
             <input type="file" id="file1" accept="image/*">
             <div class="image-container" id="container1">
-                <img id="image1" alt="Image 1" src="images.png">
+                <img id="image1" alt="Image 1" src="/static/images.png">
                 <div id="points-image1"></div>
             </div>
-            <button onclick="undoPoint('image1')">Delete point</button>
+            <button class="btn-red" onclick="undoPoint('image1')">Delete point</button>
         </div>
 
-        <!-- Второе изображение -->
         <div>
             <input type="file" id="file2" accept="image/*">
             <div class="image-container" id="container2">
-                <img id="image2" alt="Image 2" src="images.png">
+                <img id="image2" alt="Image 2" src="/static/images.png">
                 <div id="points-image2"></div>
             </div>
-            <button onclick="undoPoint('image2')">Delete point</button>
+            <button class="btn-red" onclick="undoPoint('image2')">Delete point</button>
         </div>
     </div>
 
     <button onclick="sendData()">Send Data</button>
 
-
+    <p id="result"></p>
     <script>
         let points = {
             image1: [],
             image2: []
         };
-        let currentPoint = 'blue';
+        let currentPointDefault = 'blue';
+        let currentPoints = {};
 
-        // Функция для отображения загруженного изображения и динамического изменения контейнера
-        function loadImage(input, imgElement, containerElement, placeholderElement, imageId) {
+        function loadImage(input, imgElement, containerElement, imageId) {
             const file = input.files[0];
             const reader = new FileReader();
             reader.onload = function (e) {
                 imgElement.src = e.target.result;
-                imgElement.hidden = false;
                 imgElement.dataset.width = null;
                 imgElement.dataset.height = null;
-                placeholderElement.style.display = 'none'; // Скрываем плейсхолдер
 
                 // Удаляем все точки, если изображение меняется
-                const pointsContainer = document.getElementById('points-' + imageId);
-                pointsContainer.innerHTML = '';
-                points[imageId] = []; // Очищаем массив точек
+                undoPoint(imageId);
+                undoPoint(imageId);
 
                 const img = new Image();
                 img.src = e.target.result;
@@ -198,14 +196,12 @@
                     imgElement.dataset.height = imgHeight;
 
                     // Определение масштаба изображения для его отображения
-                    const maxContainerSize = 700; // Максимальный размер контейнера (500x500 пикселей)
+                    const maxContainerSize = 500;
                     let scale = Math.min(maxContainerSize / imgWidth, maxContainerSize / imgHeight);
 
-                    // Вычисляем размеры отображаемого изображения
                     const displayWidth = imgWidth * scale;
                     const displayHeight = imgHeight * scale;
 
-                    // Устанавливаем размеры контейнера под отображаемое изображение
                     containerElement.style.width = displayWidth + 'px';
                     containerElement.style.height = displayHeight + 'px';
                 };
@@ -213,17 +209,17 @@
             reader.readAsDataURL(file);
         }
 
-        // Загрузка изображений при выборе
         document.getElementById('file1').addEventListener('change', function() {
-            loadImage(this, document.getElementById('image1'), document.getElementById('container1'), document.getElementById('placeholder1'), 'image1');
+            loadImage(this, document.getElementById('image1'), document.getElementById('container1'), 'image1');
         });
 
         document.getElementById('file2').addEventListener('change', function() {
-            loadImage(this, document.getElementById('image2'), document.getElementById('container2'), document.getElementById('placeholder2'), 'image2');
+            loadImage(this, document.getElementById('image2'), document.getElementById('container2'), 'image2');
         });
 
         // Функция для размещения точки
         function placePoint(event, imageId) {
+            const currentPoint = currentPoints[imageId] || currentPointDefault;
             const container = document.getElementById('points-' + imageId);
             const img = document.getElementById(imageId);
             const imgWidth = img.dataset.width;
@@ -235,33 +231,36 @@
             }
 
             const containerRect = img.getBoundingClientRect();
-            const xRelative = event.clientX - containerRect.left;
-            const yRelative = event.clientY - containerRect.top;
+            const xRelative = Math.max(0, event.clientX - containerRect.left);
+            const yRelative = Math.max(0, event.clientY - containerRect.top);
 
             // Рассчет координат относительно исходного изображения
             const scaleX = imgWidth / containerRect.width;
             const scaleY = imgHeight / containerRect.height;
             const x = xRelative * scaleX;
             const y = yRelative * scaleY;
+            // console.log(x, y)
+            // console.log(xRelative, yRelative)
+            // console.log(scaleX, scaleY)
+            // console.log(imgWidth, imgHeight)
 
             // Проверяем, если уже есть 2 точки, то не добавляем больше
             if (points[imageId].length >= 2) return;
 
-            // Добавляем точку
+
             const point = document.createElement('div');
             point.className = 'point ' + (currentPoint === 'blue' ? 'blue-point' : 'red-point');
             point.style.left = `${xRelative}px`;
             point.style.top = `${yRelative}px`;
             container.appendChild(point);
 
-            // Сохраняем координаты точки относительно исходного изображения
+
             points[imageId].push({ color: currentPoint, x, y, element: point });
 
-            // Меняем цвет на следующий (синяя -> красная -> завершение)
-            currentPoint = currentPoint === 'blue' ? 'red' : 'blue';
+
+            currentPoints[imageId] = currentPoint === 'blue' ? 'red' : 'blue';
         }
 
-        // Добавляем клик на изображения для размещения точек
         document.getElementById('image1').addEventListener('click', function (event) {
             if (this.src) {
                 placePoint(event, 'image1');
@@ -273,43 +272,64 @@
             }
         });
 
-        // Функция для отмены последней добавленной точки
         function undoPoint(imageId) {
             if (points[imageId].length > 0) {
-                // Удаляем последнюю точку с интерфейса
                 const lastPoint = points[imageId].pop();
                 lastPoint.element.remove();
 
-                // Если удалили красную точку, следующая добавится синяя
-                currentPoint = lastPoint.color === 'red' ? 'red' : 'blue';
+                currentPoints[imageId] = lastPoint.color === 'red' ? 'red' : 'blue';
             }
         }
 
-        // Функция для отправки данных на сервер
         function sendData() {
             const file1 = document.getElementById('file1').files[0];
             const file2 = document.getElementById('file2').files[0];
 
             if (!file1 || !file2 || points.image1.length !== 2 || points.image2.length !== 2) {
-                alert('Пожалуйста, выберите два изображения и отметьте по две точки на каждом.');
+                alert('Please upload two images and add two points on each.');
                 return;
             }
 
             const formData = new FormData();
-            formData.append('file1', file1);
-            formData.append('file2', file2);
-            formData.append('points', JSON.stringify(points));
+            formData.append('image1', file1);
+            formData.append('image2', file2);
+            formData.append('coords1', JSON.stringify(
+                {
+                    red: {
+                        x: points.image1.find(p => p.color === 'red').x,
+                        y: points.image1.find(p => p.color === 'red').y
+                    },
+                    blue: {
+                        x: points.image1.find(p => p.color === 'blue').x,
+                        y: points.image1.find(p => p.color === 'blue').y
+                    }
+                }));
+            formData.append('coords2', JSON.stringify(
+                {
+                    red: {
+                        x: points.image2.find(p => p.color === 'red').x,
+                        y: points.image2.find(p => p.color === 'red').y
+                    },
+                    blue: {
+                        x: points.image2.find(p => p.color === 'blue').x,
+                        y: points.image2.find(p => p.color === 'blue').y
+                    }
+                }));
 
-            fetch('/process-data', {
+            fetch('/api/v1/calculate-distance/', {
                 method: 'POST',
                 body: formData
             })
             .then(response => response.json())
             .then(data => {
-                console.log('Success:', data);
+                if (data.error) {
+                    document.getElementById('result').innerText = `Error: ${data.error}`;
+                } else {
+                    document.getElementById('result').innerText = `3D Distance: ${data.distance} mm`;
+                }
             })
             .catch(error => {
-                console.error('Error:', error);
+                document.getElementById('result').innerText = `Error: ${error.message}`;
             });
         }
     </script>

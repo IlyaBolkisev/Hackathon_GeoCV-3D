@@ -1,0 +1,30 @@
+version: '3.9'
+
+services:
+  fastapi:
+    build:
+      dockerfile: deploy/app/Dockerfile
+      context: .
+    container_name: fastapi
+    hostname: fastapi
+    expose:
+      - "8000"
+    networks:
+      - app-network
+
+  nginx:
+    build:
+      dockerfile: deploy/nginx/Dockerfile
+      context: .
+    container_name: nginx
+    hostname: nginx
+    ports:
+      - "80:80"
+    networks:
+      - app-network
+    depends_on:
+      - fastapi
+
+networks:
+  app-network:
+    driver: bridge
