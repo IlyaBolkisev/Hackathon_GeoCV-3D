@@ -6,8 +6,8 @@ from stereovision.calibration import StereoCalibration
 
 calibration = StereoCalibration(input_folder='./cameras_params')
 
-img_left = ''
-img_right = ''
+img_left = cv2.cvtColor(cv2.imread('./left/rotateX_0001002.png', 1), cv2.COLOR_BGR2RGB)
+img_right = cv2.cvtColor(cv2.imread('./right/rotateX_0001001.png', 1), cv2.COLOR_BGR2RGB)
 
 rectified_pair = calibration.rectify((img_left, img_right))
 

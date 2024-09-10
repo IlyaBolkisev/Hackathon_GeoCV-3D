@@ -4,6 +4,7 @@ import numpy as np
 import json
 from stereovision.calibration import StereoCalibrator
 from stereovision.exceptions import ChessboardNotFoundError
+from tqdm import tqdm
 
 rows = 6 # num cols
 cols = 9 # num rows
@@ -14,14 +15,18 @@ img_size = (1920, 1080) # calibration images size
 calibrator = StereoCalibrator(rows, cols, square_size, img_size)
 
 images_path = './chessboard/'
-img_pairs = os.listdir(images_path)
+# img_pairs = os.listdir(images_path)
 
-for pair_path in img_pairs:
-    left_name = os.path.join(images_path, pair_path, 'left.png')
-    right_name = os.path.join(images_path, pair_path, 'right.png')
+# for pair_path in img_pairs:
+    # left_name = os.path.join(images_path, pair_path, 'left.png')
+    # right_name = os.path.join(images_path, pair_path, 'right.png')
+for left_name, right_name in tqdm(zip(os.listdir('./left'), os.listdir('./right'))):
+    # img_left = cv2.imread(left_name, 1)
+    # img_right = cv2.imread(right_name, 1)
+    assert left_name.split('_')[1][:4] == right_name.split('_')[1][:4]
 
-    img_left = cv2.imread(left_name, 1)
-    img_right = cv2.imread(right_name, 1)
+    img_left = cv2.imread(os.path.join('./left', left_name), 1)
+    img_right = cv2.imread(os.path.join('./right', right_name), 1)
 
     assert img_left.shape == img_right.shape
 
