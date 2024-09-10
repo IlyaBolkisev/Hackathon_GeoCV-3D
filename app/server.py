@@ -6,11 +6,12 @@ import numpy as np
 from PIL import Image
 import io
 import logging
+import uvicorn
 
 
 # TODO replace with real func
-def calculate_3d_distance(img1, img2, coords1, coords2):
-    return 123.45
+def wrapper(img1, img2, coords1, coords2):
+    return 1.1, np.array([0])
 
 
 app = FastAPI()
@@ -49,10 +50,14 @@ async def calculate_distance(
         }
 
         # Calculate distances
-        distance = calculate_3d_distance(img1_np, img2_np, coords1_np, coords2_np)
+        distance = wrapper(img1_np, img2_np, coords1_np, coords2_np)
 
         return {"distance": distance}
 
     except Exception as e:
         logging.error(e)
         raise HTTPException(status_code=500)
+
+
+if __name__ == "__main__":
+    uvicorn.run(app, host="localhost", port=8000)
