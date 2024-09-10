@@ -2,10 +2,12 @@
 
 ## Run instructions
 ### With Docker
-simply run 
+1. Run docker containers with docker-compose
 ```bash
 docker-compose up
 ```
+2. Open the browser and go to http://localhost:8000/
+
 ### Without Docker
 1. Install the required packages
 ```bash
