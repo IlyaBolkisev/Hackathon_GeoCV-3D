@@ -136,6 +136,13 @@
           }
         }
 
+        #viewer {
+            width: 100%;
+            height: 500px; /* Ensure the viewer has a defined height */
+            margin-top: 20px;
+            border: 1px solid #ccc;
+            background-color: #fff;
+        }
     </style>
 </head>
 <body>
@@ -163,10 +170,25 @@
         </div>
     </div>
 
-    <button onclick="sendData()">Send Data</button>
+    <button id="sendButton" onclick="sendData()">Send Data</button>
 
     <p id="result"></p>
-    <script>
+
+    <div id="viewer"></div>
+    <script type="importmap">
+      {
+        "imports": {
+          "three": "https://cdn.jsdelivr.net/npm/three@0.153.0/build/three.module.js",
+          "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.153.0/examples/jsm/"
+        }
+      }
+    </script>
+
+    <script type="module">
+        import * as THREE from 'three';
+        import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+        import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+
         let points = {
             image1: [],
             image2: []
@@ -174,7 +196,7 @@
         let currentPointDefault = 'blue';
         let currentPoints = {};
 
-        function loadImage(input, imgElement, containerElement, imageId) {
+        window.loadImage = function(input, imgElement, containerElement, imageId) {
             const file = input.files[0];
             const reader = new FileReader();
             reader.onload = function (e) {
@@ -218,7 +240,7 @@
         });
 
         // Функция для размещения точки
-        function placePoint(event, imageId) {
+        window.placePoint = function(event, imageId) {
             const currentPoint = currentPoints[imageId] || currentPointDefault;
             const container = document.getElementById('points-' + imageId);
             const img = document.getElementById(imageId);
@@ -272,7 +294,7 @@
             }
         });
 
-        function undoPoint(imageId) {
+        window.undoPoint = function(imageId) {
             if (points[imageId].length > 0) {
                 const lastPoint = points[imageId].pop();
                 lastPoint.element.remove();
@@ -281,12 +303,16 @@
             }
         }
 
-        function sendData() {
+        window.sendData = function() {
+            const sendButton = document.getElementById('sendButton');
+            sendButton.disabled = true;
             const file1 = document.getElementById('file1').files[0];
             const file2 = document.getElementById('file2').files[0];
 
             if (!file1 || !file2 || points.image1.length !== 2 || points.image2.length !== 2) {
                 alert('Please upload two images and add two points on each.');
+
+                sendButton.disabled = false;
                 return;
             }
 
@@ -326,10 +352,89 @@
                     document.getElementById('result').innerText = `Error: ${data.error}`;
                 } else {
                     document.getElementById('result').innerText = `3D Distance: ${data.distance} mm`;
+                    console.log(data);
+                    render3DModel(data.mesh);
                 }
+                sendButton.disabled = false;
             })
             .catch(error => {
                 document.getElementById('result').innerText = `Error: ${error.message}`;
+                sendButton.disabled = false;
+            });
+        }
+
+        function render3DModel(meshData) {
+            const viewer = document.getElementById('viewer');
+            viewer.innerHTML = '';  // Clear previous content
+
+            const scene = new THREE.Scene();
+            const camera = new THREE.PerspectiveCamera(75, viewer.clientWidth / viewer.clientHeight, 0.1, 1000);
+            const renderer = new THREE.WebGLRenderer({ antialias: true });
+            renderer.setSize(viewer.clientWidth, viewer.clientHeight);
+            renderer.shadowMap.enabled = true; // Enable shadow map
+            renderer.setClearColor(0xf0f0f5); // Set background color to match site
+            viewer.appendChild(renderer.domElement);
+
+            const controls = new OrbitControls(camera, renderer.domElement);
+            camera.position.set(150, 150, 150); // Adjusted to view larger objects from a distance
+            controls.update();
+
+            // Scale up the ground plane to accommodate larger objects
+            const planeGeometry = new THREE.PlaneGeometry(400, 400); // Adjusted size
+            const planeMaterial = new THREE.ShadowMaterial({ opacity: 0.5 });
+            const plane = new THREE.Mesh(planeGeometry, planeMaterial);
+            plane.rotation.x = -Math.PI / 2;
+            plane.position.y = -1;
+            plane.receiveShadow = true;
+            scene.add(plane);
+
+            // Add multiple lights for a more dynamic look
+            const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
+            directionalLight.position.set(100, 200, 100);
+            directionalLight.castShadow = true;
+            directionalLight.shadow.mapSize.width = 4096;
+            directionalLight.shadow.mapSize.height = 4096;
+            directionalLight.shadow.camera.near = 0.5;
+            directionalLight.shadow.camera.far = 500;
+            scene.add(directionalLight);
+
+            const pointLight = new THREE.PointLight(0xffffff, 0.5, 1000);
+            pointLight.position.set(-100, 200, 100);
+            pointLight.castShadow = true;
+            scene.add(pointLight);
+
+            const ambientLight = new THREE.AmbientLight(0x404040); // Soft ambient light
+            scene.add(ambientLight);
+
+            // Create voxel cubes from meshData (3D array)
+            const voxelSize = 1;  // Adjusted for visibility
+            const geometry = new THREE.BoxGeometry(voxelSize, voxelSize, voxelSize);
+            const material = new THREE.MeshPhongMaterial({ color: 0x0080ff });
+
+            const group = new THREE.Group(); // Group for rotation
+            meshData.forEach(voxel => {
+                const [x, y, z] = voxel;
+                const voxelMesh = new THREE.Mesh(geometry, material);
+                voxelMesh.position.set(x * voxelSize, y * voxelSize, z * voxelSize);
+                voxelMesh.castShadow = true;
+                voxelMesh.receiveShadow = true;
+                group.add(voxelMesh);
+            });
+            scene.add(group);
+
+            function animate() {
+                requestAnimationFrame(animate);
+                controls.update();
+                group.rotation.y += 0.01; // Rotate the object slowly
+                renderer.render(scene, camera);
+            }
+
+            animate();
+
+            window.addEventListener('resize', () => {
+                camera.aspect = viewer.clientWidth / viewer.clientHeight;
+                camera.updateProjectionMatrix();
+                renderer.setSize(viewer.clientWidth, viewer.clientHeight);
             });
         }
     </script>

@@ -1,6 +1,10 @@
+import time
+
 from fastapi import FastAPI, UploadFile, HTTPException, Form
+from numpy import ndarray, dtype, floating, float_
+from numpy._typing import _64Bit
 from pydantic import BaseModel
-from typing import Dict, Annotated
+from typing import Dict, Annotated, Tuple, Any
 import numpy as np
 # from geo_estimate import calculate_3d_distance
 from PIL import Image
@@ -9,8 +13,20 @@ import logging
 
 
 # TODO replace with real func
-def calculate_3d_distance(img1, img2, coords1, coords2):
-    return 123.45
+# ndarray sizes are made up. don't know the real sizes
+def calculate_3d_distance(
+        img1: ndarray[Any, dtype[floating[_64Bit] | float_]], img2: ndarray[Any, dtype[floating[_64Bit] | float_]],
+        coords1: dict[str, ndarray[Any, dtype[floating[_64Bit] | float_]]],
+        coords2: dict[str, ndarray[Any, dtype[floating[_64Bit] | float_]]]) \
+        -> tuple[float, ndarray[Any, dtype[floating[_64Bit] | float_]]]:
+    mesh = np.zeros([50, 50, 50])
+    for i in range(len(mesh)):
+        for j in range(len(mesh[i])):
+            for k in range(len(mesh[i][j])):
+                if i == 0 or i == 49 or j == 0 or j == 49 or k == 0 or k == 49:
+                    mesh[i][j][k] = 255
+    time.sleep(1)
+    return 123.45, mesh
 
 
 app = FastAPI()
@@ -49,9 +65,16 @@ async def calculate_distance(
         }
 
         # Calculate distances
-        distance = calculate_3d_distance(img1_np, img2_np, coords1_np, coords2_np)
+        distance, mesh = calculate_3d_distance(img1_np, img2_np, coords1_np, coords2_np)
+        mesh = mesh.tolist()
+        voxels = []
+        for i in range(len(mesh)):
+            for j in range(len(mesh[i])):
+                for k in range(len(mesh[i][j])):
+                    if mesh[i][j][k] != 0:
+                        voxels.append([i, j, k])
 
-        return {"distance": distance}
+        return {"distance": distance, "mesh": voxels}
 
     except Exception as e:
         logging.error(e)
