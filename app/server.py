@@ -1,8 +1,9 @@
+import base64
 import time
 
 from fastapi import FastAPI, UploadFile, HTTPException, Form
-from numpy import ndarray, dtype, floating, float_
-from numpy._typing import _64Bit
+from numpy import ndarray, dtype, floating, float_, unsignedinteger
+from numpy._typing import _64Bit, _8Bit
 from pydantic import BaseModel
 from typing import Dict, Annotated, Tuple, Any
 import numpy as np
@@ -16,17 +17,16 @@ import logging
 # ndarray sizes are made up. don't know the real sizes
 def calculate_3d_distance(
         img1: ndarray[Any, dtype[floating[_64Bit] | float_]], img2: ndarray[Any, dtype[floating[_64Bit] | float_]],
-        coords1: dict[str, ndarray[Any, dtype[floating[_64Bit] | float_]]],
-        coords2: dict[str, ndarray[Any, dtype[floating[_64Bit] | float_]]]) \
-        -> tuple[float, ndarray[Any, dtype[floating[_64Bit] | float_]]]:
-    mesh = np.zeros([50, 50, 50])
-    for i in range(len(mesh)):
-        for j in range(len(mesh[i])):
-            for k in range(len(mesh[i][j])):
-                if i == 0 or i == 49 or j == 0 or j == 49 or k == 0 or k == 49:
-                    mesh[i][j][k] = 255
-    time.sleep(1)
-    return 123.45, mesh
+        coords: dict[str, ndarray[Any, dtype[floating[_64Bit] | float_]]]) \
+        -> tuple[
+            float, ndarray[Any, dtype[floating[_64Bit] | float_]] | ndarray[Any, dtype[Any]], dict[str, str | bytes]]:
+    w, h = 512, 512
+    data = np.zeros((h, w, 3), dtype=np.uint8)
+    data[0:256, 0:256] = [255, 0, 0]  # red patch in upper left
+    img = Image.fromarray(data, 'RGB')
+    buf = io.BytesIO()
+    img.save(buf, format='PNG')
+    return 123.45, data, {"name": "model.png", "data": buf.getvalue(), "type": "image/png"}
 
 
 app = FastAPI()
@@ -42,39 +42,40 @@ async def calculate_distance(
     image1: UploadFile,
     image2: UploadFile,
     coords1: Annotated[str, Form()],
-    coords2: Annotated[str, Form()],
 ):
     try:
         # Convert uploaded images to PIL Image
-        img1 = Image.open(io.BytesIO(await image1.read()))
+        main_img = Image.open(io.BytesIO(await image1.read()))
         img2 = Image.open(io.BytesIO(await image2.read()))
         coords1 = Coordinates.parse_raw(coords1)
-        coords2 = Coordinates.parse_raw(coords2)
         # Convert the image to numpy arrays
-        img1_np = np.array(img1)
+        main_img_np = np.array(main_img)
         img2_np = np.array(img2)
 
         # Convert coordinates to numpy arrays
-        coords1_np = {
+        coords_np = {
             "red": np.array([coords1.red["x"], coords1.red["y"]]),
             "blue": np.array([coords1.blue["x"], coords1.blue["y"]])
         }
-        coords2_np = {
-            "red": np.array([coords2.red["x"], coords2.red["y"]]),
-            "blue": np.array([coords2.blue["x"], coords2.blue["y"]])
-        }
 
         # Calculate distances
-        distance, mesh = calculate_3d_distance(img1_np, img2_np, coords1_np, coords2_np)
-        mesh = mesh.tolist()
-        voxels = []
-        for i in range(len(mesh)):
-            for j in range(len(mesh[i])):
-                for k in range(len(mesh[i][j])):
-                    if mesh[i][j][k] != 0:
-                        voxels.append([i, j, k])
+        distance, screenshot_np, model = calculate_3d_distance(main_img_np, img2_np, coords_np)
+        screenshot = Image.fromarray(screenshot_np)
+        screenshot_buf = io.BytesIO()
+        screenshot.save(screenshot_buf, format='PNG')
 
-        return {"distance": distance, "mesh": voxels}
+        return {
+            "distance": distance,
+            "screenshot": {
+                "name": "screenshot.png",
+                "data": base64.b64encode(screenshot_buf.getvalue()).decode("utf-8"),
+                "type": "image/png"
+            },
+            "model": {
+                "name": model["name"],
+                "data": base64.b64encode(model["data"]).decode("utf-8"),
+                "type": model["type"]
+            }}
 
     except Exception as e:
         logging.error(e)

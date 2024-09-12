@@ -6,7 +6,7 @@
 ```bash
 docker-compose up
 ```
-2. Open the browser and go to http://localhost:8000/
+2. Open the browser and go to http://localhost/
 
 ### Without Docker
 1. Install the required packages
