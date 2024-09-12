@@ -1,0 +1,454 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GeoCV-3D</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            background-color: #f0f0f5;
+            margin: 0;
+        }
+        h1 {
+            margin-bottom: 20px;
+        }
+        .container {
+            display: flex;
+            justify-content: space-between;
+            gap: 40px;
+            margin-bottom: 20px;
+        }
+        .image-container {
+            position: relative;
+            border: 2px solid #ccc;
+            border-radius: 0;
+            background-color: #fff;
+            overflow: hidden;
+            max-width: 1000px;
+            max-height: 1000px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .image-container img {
+            width: 100%;
+            height: 100%;
+            object-fit: contain;
+            display: block;
+        }
+        .image-placeholder {
+            width: 100%;
+            height: 100%;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            background-color: #f0f0f5;
+        }
+        .point {
+            position: absolute;
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            transform: translate(-50%, -50%);
+        }
+        .blue-point {
+            background-color: #0080ff;
+        }
+        .red-point {
+            background-color: red;
+        }
+        .horizontal-center {
+          margin: 0;
+          position: absolute;
+          left: 50%;
+          -ms-transform: translateY(-50%);
+          transform: translateY(-50%);
+        }
+        .btn-red {
+            background-color: rgba(237, 43, 43, 0.7);
+        }
+        button {
+            padding: 10px 20px;
+            background-color: #28a745;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        input[type="file"] {
+            margin-bottom: 10px;
+        }
+
+        .loader {
+          width: 48px;
+          height: 48px;
+          display: inline-block;
+          position: relative;
+          border: 2px solid #000;
+          box-sizing: border-box;
+          animation: rotation 2s linear infinite;
+        }
+        .loader::after,
+        .loader::before {
+          content: '';
+          box-sizing: border-box;
+          position: absolute;
+          left: 0;
+          right: 0;
+          top: 0;
+          bottom: 0;
+          margin: auto;
+          border: 2px solid #FF3D00;
+          width: 38px;
+          height: 38px;
+          animation: rotationBack 1.5s linear infinite;
+          transform-origin: center center;
+        }
+        .loader::before {
+          width: 28px;
+          height: 28px;
+          border-color: #0080ff;
+          box-sizing: border-box;
+          animation: rotation 1s linear infinite;
+        }
+
+        @keyframes rotation {
+          0% {
+            transform: rotate(0deg);
+          }
+          100% {
+            transform: rotate(360deg);
+          }
+        }
+        @keyframes rotationBack {
+          0% {
+            transform: rotate(0deg);
+          }
+          100% {
+            transform: rotate(-360deg);
+          }
+        }
+
+        #viewer {
+            width: 100%;
+            height: 500px; /* Ensure the viewer has a defined height */
+            margin-top: 20px;
+            border: 1px solid #ccc;
+            background-color: #fff;
+        }
+    </style>
+</head>
+<body>
+    <div class="loader"></div>
+    <h1>Compute geometry</h1>
+    <h2>Upload two photos and then draw two dots to compute distance between dots.</h2>
+
+    <div class="container">
+        <div>
+            <input type="file" id="file1" accept="image/*" placeholder="Upload left photo">
+            <input type="file" id="file2" accept="image/*" placeholder="Upload right Photo">
+            <div class="image-container" id="container1">
+                <img id="image1" alt="Image 1" src="/static/images.png">
+                <div id="points-image1"></div>
+            </div>
+            <button class="btn-red" onclick="undoPoint('image1')">Delete point</button>
+        </div>
+
+        <div hidden>
+            <div class="image-container" id="container2">
+                <img id="image2" alt="Image 2" src="/static/images.png">
+                <div id="points-image2"></div>
+            </div>
+            <button class="btn-red" onclick="undoPoint('image2')">Delete point</button>
+        </div>
+    </div>
+
+    <button id="sendButton" onclick="sendData()">Send Data</button>
+
+    <p id="result"></p>
+    <a href="" id="modelDownloader" download></a>
+
+<!--    <div id="viewer"></div>-->
+    <div id="screenshotContainerOuter" hidden>
+        <div class="image-container" id="screenshotContainer">
+            <img id="screenshot" alt="Image resp" src="#">
+        </div>
+    </div>
+<!--    <script type="importmap">-->
+<!--      {-->
+<!--        "imports": {-->
+<!--          "three": "https://cdn.jsdelivr.net/npm/three@0.153.0/build/three.module.js",-->
+<!--          "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.153.0/examples/jsm/"-->
+<!--        }-->
+<!--      }-->
+<!--    </script>-->
+
+    <script type="module">
+        // import * as THREE from 'three';
+        // import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+        // import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+
+        let points = {
+            image1: [],
+            image2: []
+        };
+        let currentPointDefault = 'blue';
+        let currentPoints = {};
+
+        window.loadImage = function(input, imgElement, containerElement, imageId) {
+            const file = input.files[0];
+            const reader = new FileReader();
+            reader.onload = function (e) {
+                imgElement.src = e.target.result;
+                imgElement.dataset.width = null;
+                imgElement.dataset.height = null;
+
+                // Удаляем все точки, если изображение меняется
+                undoPoint(imageId);
+                undoPoint(imageId);
+
+                const img = new Image();
+                img.src = e.target.result;
+                img.onload = function() {
+                    const imgWidth = img.width;
+                    const imgHeight = img.height;
+
+                    imgElement.dataset.width = imgWidth;
+                    imgElement.dataset.height = imgHeight;
+
+                    // Определение масштаба изображения для его отображения
+                    const maxContainerSize = 500;
+                    let scale = Math.min(maxContainerSize / imgWidth, maxContainerSize / imgHeight);
+
+                    const displayWidth = imgWidth * scale;
+                    const displayHeight = imgHeight * scale;
+
+                    containerElement.style.width = displayWidth + 'px';
+                    containerElement.style.height = displayHeight + 'px';
+                };
+            };
+            reader.readAsDataURL(file);
+        }
+
+        document.getElementById('file1').addEventListener('change', function() {
+            loadImage(this, document.getElementById('image1'), document.getElementById('container1'), 'image1');
+        });
+
+        document.getElementById('file2').addEventListener('change', function() {
+            loadImage(this, document.getElementById('image2'), document.getElementById('container2'), 'image2');
+        });
+
+        // Функция для размещения точки
+        window.placePoint = function(event, imageId) {
+            const currentPoint = currentPoints[imageId] || currentPointDefault;
+            const container = document.getElementById('points-' + imageId);
+            const img = document.getElementById(imageId);
+            const imgWidth = img.dataset.width;
+            const imgHeight = img.dataset.height;
+
+            if (!imgWidth || !imgHeight) {
+                alert('Изображение еще не загружено полностью.');
+                return;
+            }
+
+            const containerRect = img.getBoundingClientRect();
+            const xRelative = Math.max(0, event.clientX - containerRect.left);
+            const yRelative = Math.max(0, event.clientY - containerRect.top);
+
+            // Рассчет координат относительно исходного изображения
+            const scaleX = imgWidth / containerRect.width;
+            const scaleY = imgHeight / containerRect.height;
+            const x = xRelative * scaleX;
+            const y = yRelative * scaleY;
+            // console.log(x, y)
+            // console.log(xRelative, yRelative)
+            // console.log(scaleX, scaleY)
+            // console.log(imgWidth, imgHeight)
+
+            // Проверяем, если уже есть 2 точки, то не добавляем больше
+            if (points[imageId].length >= 2) return;
+
+
+            const point = document.createElement('div');
+            point.className = 'point ' + (currentPoint === 'blue' ? 'blue-point' : 'red-point');
+            point.style.left = `${xRelative}px`;
+            point.style.top = `${yRelative}px`;
+            container.appendChild(point);
+
+
+            points[imageId].push({ color: currentPoint, x, y, element: point });
+
+
+            currentPoints[imageId] = currentPoint === 'blue' ? 'red' : 'blue';
+        }
+
+        document.getElementById('image1').addEventListener('click', function (event) {
+            if (this.src) {
+                placePoint(event, 'image1');
+            }
+        });
+        document.getElementById('image2').addEventListener('click', function (event) {
+            if (this.src) {
+                placePoint(event, 'image2');
+            }
+        });
+
+        window.undoPoint = function(imageId) {
+            if (points[imageId].length > 0) {
+                const lastPoint = points[imageId].pop();
+                lastPoint.element.remove();
+
+                currentPoints[imageId] = lastPoint.color === 'red' ? 'red' : 'blue';
+            }
+        }
+
+        window.sendData = function() {
+            const sendButton = document.getElementById('sendButton');
+            sendButton.disabled = true;
+            const file1 = document.getElementById('file1').files[0];
+            const file2 = document.getElementById('file2').files[0];
+
+            if (!file1 || !file2 || points.image1.length !== 2) {
+                alert('Please upload two images and add two points.');
+
+                sendButton.disabled = false;
+                return;
+            }
+
+            const formData = new FormData();
+            formData.append('image1', file1);
+            formData.append('image2', file2);
+            formData.append('coords1', JSON.stringify(
+                {
+                    red: {
+                        x: points.image1.find(p => p.color === 'red').x,
+                        y: points.image1.find(p => p.color === 'red').y
+                    },
+                    blue: {
+                        x: points.image1.find(p => p.color === 'blue').x,
+                        y: points.image1.find(p => p.color === 'blue').y
+                    }
+                }));
+            // formData.append('coords2', JSON.stringify(
+            //     {
+            //         red: {
+            //             x: points.image2.find(p => p.color === 'red').x,
+            //             y: points.image2.find(p => p.color === 'red').y
+            //         },
+            //         blue: {
+            //             x: points.image2.find(p => p.color === 'blue').x,
+            //             y: points.image2.find(p => p.color === 'blue').y
+            //         }
+            //     }));
+
+            fetch('/api/v1/calculate-distance/', {
+                method: 'POST',
+                body: formData
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.error) {
+                    document.getElementById('result').innerText = `Error: ${data.error}`;
+                } else {
+                    document.getElementById('result').innerText = `3D Distance: ${data.distance} mm`;
+                    console.log(data);
+                    const screenshot = document.getElementById('screenshot');
+                    screenshot.src = `data:${data.screenshot.type};base64,${data.screenshot.data}`
+                    document.getElementById('screenshotContainerOuter').hidden = false;
+                    const modelDownloader = document.getElementById('modelDownloader');
+                    modelDownloader.href = `data:${data.model.type};base64,${data.model.data}`;
+                    modelDownloader.download = data.model.name;
+                    modelDownloader.innerHTML = '<p>Download 3D reconstruction</p>'
+                }
+                sendButton.disabled = false;
+            })
+            .catch(error => {
+                document.getElementById('result').innerText = `Error: ${error.message}`;
+                sendButton.disabled = false;
+            });
+        }
+
+        // function render3DModel(meshData) {
+        //     const viewer = document.getElementById('viewer');
+        //     viewer.innerHTML = '';  // Clear previous content
+        //
+        //     const scene = new THREE.Scene();
+        //     const camera = new THREE.PerspectiveCamera(75, viewer.clientWidth / viewer.clientHeight, 0.1, 1000);
+        //     const renderer = new THREE.WebGLRenderer({ antialias: true });
+        //     renderer.setSize(viewer.clientWidth, viewer.clientHeight);
+        //     renderer.shadowMap.enabled = true; // Enable shadow map
+        //     renderer.setClearColor(0xf0f0f5); // Set background color to match site
+        //     viewer.appendChild(renderer.domElement);
+        //
+        //     const controls = new OrbitControls(camera, renderer.domElement);
+        //     camera.position.set(150, 150, 150); // Adjusted to view larger objects from a distance
+        //     controls.update();
+        //
+        //     // Scale up the ground plane to accommodate larger objects
+        //     const planeGeometry = new THREE.PlaneGeometry(400, 400); // Adjusted size
+        //     const planeMaterial = new THREE.ShadowMaterial({ opacity: 0.5 });
+        //     const plane = new THREE.Mesh(planeGeometry, planeMaterial);
+        //     plane.rotation.x = -Math.PI / 2;
+        //     plane.position.y = -1;
+        //     plane.receiveShadow = true;
+        //     scene.add(plane);
+        //
+        //     // Add multiple lights for a more dynamic look
+        //     const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
+        //     directionalLight.position.set(100, 200, 100);
+        //     directionalLight.castShadow = true;
+        //     directionalLight.shadow.mapSize.width = 4096;
+        //     directionalLight.shadow.mapSize.height = 4096;
+        //     directionalLight.shadow.camera.near = 0.5;
+        //     directionalLight.shadow.camera.far = 500;
+        //     scene.add(directionalLight);
+        //
+        //     const pointLight = new THREE.PointLight(0xffffff, 0.5, 1000);
+        //     pointLight.position.set(-100, 200, 100);
+        //     pointLight.castShadow = true;
+        //     scene.add(pointLight);
+        //
+        //     const ambientLight = new THREE.AmbientLight(0x404040); // Soft ambient light
+        //     scene.add(ambientLight);
+        //
+        //     // Create voxel cubes from meshData (3D array)
+        //     const voxelSize = 1;  // Adjusted for visibility
+        //     const geometry = new THREE.BoxGeometry(voxelSize, voxelSize, voxelSize);
+        //     const material = new THREE.MeshPhongMaterial({ color: 0x0080ff });
+        //
+        //     const group = new THREE.Group(); // Group for rotation
+        //     meshData.forEach(voxel => {
+        //         const [x, y, z] = voxel;
+        //         const voxelMesh = new THREE.Mesh(geometry, material);
+        //         voxelMesh.position.set(x * voxelSize, y * voxelSize, z * voxelSize);
+        //         voxelMesh.castShadow = true;
+        //         voxelMesh.receiveShadow = true;
+        //         group.add(voxelMesh);
+        //     });
+        //     scene.add(group);
+        //
+        //     function animate() {
+        //         requestAnimationFrame(animate);
+        //         controls.update();
+        //         group.rotation.y += 0.01; // Rotate the object slowly
+        //         renderer.render(scene, camera);
+        //     }
+        //
+        //     animate();
+        //
+        //     window.addEventListener('resize', () => {
+        //         camera.aspect = viewer.clientWidth / viewer.clientHeight;
+        //         camera.updateProjectionMatrix();
+        //         renderer.setSize(viewer.clientWidth, viewer.clientHeight);
+        //     });
+        // }
+    </script>
+</body>
+</html>
