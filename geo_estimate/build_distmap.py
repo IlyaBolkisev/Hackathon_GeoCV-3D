@@ -1,23 +1,6 @@
 import cv2
 import numpy as np
 
-left_img = cv2.imread('geo_estimate/left1/cam1_1.jpg', cv2.IMREAD_GRAYSCALE)
-right_img = cv2.imread('geo_estimate/right1/Cam2_1.jpg', cv2.IMREAD_GRAYSCALE)
-
-# Настройка стерео-блока для расчета карты диспаратности
-stereo = cv2.StereoBM_create(numDisparities=16, blockSize=15)
-disparity_map = stereo.compute(left_img, right_img)
-
-disp_diff = disparity_map.max() - disparity_map.min()
-
-disparity_map = disparity_map.astype('float') / disp_diff.astype('float')
-
-dist_to_obj = 641 # mm
-
-dist_map = disparity_map * dist_to_obj + dist_to_obj
-
-print(dist_map.min(), dist_map.max())
-
 def get_distmap(disparity, dist_to_obj):
     disp = 1 - disparity
     return disp*dist_to_obj + dist_to_obj
