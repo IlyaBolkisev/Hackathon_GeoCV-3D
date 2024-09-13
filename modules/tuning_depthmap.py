@@ -4,20 +4,6 @@ import numpy as np
 import json
 from stereovision.calibration import StereoCalibration
 
-# variable_mapping = {
-#     "SWS" : 15, 
-#     "SpeckleSize" : 100, 
-#     "SpeckleRange" : 15, 
-#     "UniqRatio" : 10, 
-#     "TxtrThrshld" : 100, 
-#     "NumofDisp" : 1,
-#     "MinDisp": -25, 
-#     "PreFiltCap" : 30, 
-#     "PreFiltSize" : 105
-#     }
-# with open('sbm_params.json', 'w') as f:
-#     json.dump(variable_mapping, f)
-
 loading = False
 
 def stereo_depth_map(rectified_pair, variable_mapping):
@@ -40,15 +26,14 @@ def stereo_depth_map(rectified_pair, variable_mapping):
     sbm.setUniquenessRatio(variable_mapping['UniqRatio'])
     
 
-    c, r = rectified_pair[0].shape
     dmLeft = rectified_pair[0]
     dmRight = rectified_pair[1]
     disparity = sbm.compute(dmLeft, dmRight)
     disparity_normalized = cv2.normalize(disparity, None, 0, 255, cv2.NORM_MINMAX)
     #Convering Numpy Array to CV_8UC1
     image = np.array(disparity_normalized, dtype = np.uint8)
-    # disparity_color = cv2.applyColorMap(image, cv2.COLORMAP_JET)
-    return image, disparity_normalized
+    disparity_color = cv2.applyColorMap(image, cv2.COLORMAP_JET)
+    return disparity_color, disparity_normalized
 
 def activateTrackbars(x):
     global loading
@@ -68,8 +53,6 @@ def create_trackbars() :
     cv2.createTrackbar("MinDisp", "Stereo", -100, 200, activateTrackbars)
     cv2.createTrackbar("PreFiltCap", "Stereo", 1, 63, activateTrackbars)
     cv2.createTrackbar("PreFiltSize", "Stereo", 5, 255, activateTrackbars)
-    # cv2.createTrackbar("Save Settings", "Stereo", 0, 1, activateTrackbars)
-    # cv2.createTrackbar("Load Settings","Stereo", 0, 1, activateTrackbars)
 
 def onMouse(event, x, y, flag, disparity_normalized):
     if event == cv2.EVENT_LBUTTONDOWN:
@@ -127,7 +110,6 @@ while True:
     cv2.setMouseCallback("Stereo", onMouse, disparity_normalized)
     cv2.resizeWindow('Stereo', 1920, 600)
     cv2.imshow('Frame', cv2.resize(disparity_color, (900, 400)))
-    # cv2.imshow("Frame", cv2.resize(disparity_color, (900, 450)))
     cv2.imshow("Frame1", cv2.resize(np.hstack((rectified_pair[0], rectified_pair[1])), (1200, 600)))
 
     k = cv2.waitKey(1) & 0xFF
