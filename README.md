@@ -29,6 +29,27 @@
 Также на одной из загруженных фотографий пользователь может выбрать две произвольные точки, расстояние между которыми посчитает отдельный алгоритм.
 
 
+--- Инструкция ---
+
+### Docker
+1. Run docker containers with docker-compose
+```bash
+docker-compose up
+```
+2. Open the browser and go to http://localhost/
+
+### Venv
+1. Install the required packages
+```bash
+pip install -r requirements.txt
+```
+2. Run the app
+```bash
+python run_locally.py
+```
+3. Open the browser and go to http://localhost:8000/static/index.html
+
+
 --- Участники ---
 
 Илья Болкисев - тимлид, воссоздание и обучение архитектуры, сборка всего конвейера
