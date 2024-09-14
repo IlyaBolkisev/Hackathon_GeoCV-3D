@@ -9,7 +9,6 @@ import matplotlib.pyplot as plt
 
 from modules.build_distmap import get_distmap, get_distance
 from modules.run_predictions import run_predictions
-from modules.img_rectification import ImageRectifier
 
 
 def wrapper(
@@ -18,9 +17,6 @@ def wrapper(
         -> tuple[
             float, np.ndarray[Any, np.dtype[np.floating[_64Bit] | float_]] | np.ndarray[Any, np.dtype[Any]], dict[str, str | bytes]]:
 
-    rectifier = ImageRectifier(input_folder='../cameras_params')
-    img1, img2 = rectifier.rectify((img1, img2))
-    
     disp_l, disp_r, volume = run_predictions(img1, img2, models)
 
     dist_map = get_distmap(cv2.resize(disp_l[0], (img1.shape[1], img1.shape[0]), interpolation=cv2.INTER_LINEAR))
