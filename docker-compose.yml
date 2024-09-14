@@ -11,6 +11,10 @@ services:
       - "8000"
     networks:
       - app-network
+    volumes:
+      - ./weights:/src/weights
+      - ./cameras_params:/src/cameras_params
+      - ./static:/src/static
 
   nginx:
     build:
